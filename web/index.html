@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Drop Menu</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:#020203;color:#fff;font:13px/1.4 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;overflow:hidden}
+  body{display:flex;flex-direction:column;padding:8px}
+  header{display:flex;align-items:center;gap:8px;padding:4px 6px 8px;border-bottom:1px solid rgba(255,255,255,.06)}
+  header .dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,#16a34a,#065f46)}
+  header h1{font-size:12px;font-weight:600;letter-spacing:.04em;opacity:.7}
+  header .count{margin-left:auto;font-size:10px;opacity:.4;font-variant-numeric:tabular-nums}
+  main{flex:1;overflow-y:auto;padding:8px 4px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent}
+  main::-webkit-scrollbar{width:6px}
+  main::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .tile{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.4);transition:transform .15s,border-color .15s}
+  .tile:hover{transform:scale(1.05);border-color:rgba(255,255,255,.7)}
+  .tile:active{transform:scale(.95)}
+  .tile img{width:100%;height:100%;object-fit:cover;display:block}
+  .tile .text{display:flex;align-items:flex-start;padding:6px;font-size:9px;line-height:1.3;color:#aaa;word-break:break-all;overflow:hidden}
+  .tile .file{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:100%;padding:4px}
+  .tile .file svg{width:14px;height:14px;opacity:.4}
+  .tile .file .name{font-size:8px;opacity:.5;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  .tile .age{position:absolute;bottom:2px;right:2px;font-size:8px;color:rgba(255,255,255,.4);background:rgba(0,0,0,.5);padding:1px 4px;border-radius:6px}
+  .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:rgba(255,255,255,.2);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+  .empty svg{width:32px;height:32px;opacity:.4}
+  .err{color:#ef4444;font-size:10px;padding:8px;text-align:center}
+  .spin{width:20px;height:20px;border:1.5px solid transparent;border-top-color:#16a34a;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <h1>Drop</h1>
+  <span class="count" id="count"></span>
+</header>
+<main id="main">
+  <div class="empty"><div class="spin"></div></div>
+</main>
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  const API = (params.get("api") || "http://10.0.0.218:4321").replace(/\/$/, "");
+  const CHANNEL = params.get("channel") || "default";
+  const main = document.getElementById("main");
+  const countEl = document.getElementById("count");
+
+  const fmtAge = iso => {
+    const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return s + "s";
+    if (s < 3600) return Math.floor(s / 60) + "m";
+    if (s < 86400) return Math.floor(s / 3600) + "h";
+    return Math.floor(s / 86400) + "d";
+  };
+
+  const contentCache = new Map();
+  const fetchContent = async id => {
+    if (contentCache.has(id)) return contentCache.get(id);
+    try {
+      const r = await fetch(`${API}/api/drop?id=${id}`);
+      if (!r.ok) return null;
+      const { item } = await r.json();
+      if (item?.content) { contentCache.set(id, item.content); return item.content; }
+    } catch {}
+    return null;
+  };
+
+  const fileIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`;
+  const dropIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.338-2.32 5.75 5.75 0 0 1 .053 11.095"/></svg>`;
+
+  const tileFor = item => {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.dataset.id = item.id;
+    tile.title = item.fileName || item.contentType;
+
+    if (item.contentType === "image") {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.dataset.lazy = "1";
+      tile.appendChild(img);
+    } else if (item.contentType === "text") {
+      const div = document.createElement("div");
+      div.className = "text";
+      div.textContent = item.content || "…";
+      div.dataset.lazy = item.content ? "" : "1";
+      tile.appendChild(div);
+    } else {
+      const wrap = document.createElement("div");
+      wrap.className = "file";
+      wrap.innerHTML = fileIcon + `<span class="name">${escapeHtml(item.fileName || "file")}</span>`;
+      tile.appendChild(wrap);
+    }
+
+    const age = document.createElement("span");
+    age.className = "age";
+    age.textContent = fmtAge(item.createdAt);
+    tile.appendChild(age);
+
+    tile.addEventListener("click", () => {
+      window.parent !== window
+        ? window.parent.postMessage({ type: "drop:open", id: item.id, api: API }, "*")
+        : window.open(API + "/", "_blank");
+    });
+
+    return tile;
+  };
+
+  const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+  const observer = new IntersectionObserver(entries => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      const tile = e.target;
+      observer.unobserve(tile);
+      const id = tile.dataset.id;
+      const img = tile.querySelector('img[data-lazy="1"]');
+      const txt = tile.querySelector('.text[data-lazy="1"]');
+      if (img) fetchContent(id).then(src => { if (src) img.src = src; });
+      else if (txt) fetchContent(id).then(s => { if (s) txt.textContent = s; });
+    }
+  }, { root: main, rootMargin: "150px" });
+
+  const render = items => {
+    main.innerHTML = "";
+    countEl.textContent = items.length ? items.length : "";
+    if (!items.length) {
+      main.innerHTML = `<div class="empty">${dropIcon}<span>No drops yet</span></div>`;
+      return;
+    }
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    items.forEach(item => {
+      const t = tileFor(item);
+      grid.appendChild(t);
+      observer.observe(t);
+    });
+    main.appendChild(grid);
+  };
+
+  const load = async () => {
+    try {
+      const r = await fetch(`${API}/api/drop?channel=${CHANNEL}`);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const d = await r.json();
+      render(d.items || []);
+    } catch (err) {
+      main.innerHTML = `<div class="err">Cannot reach ${API}<br>${escapeHtml(err.message)}</div>`;
+    }
+  };
+
+  load();
+
+  // Live updates via WS, fallback to polling
+  let ws, pollTimer;
+  const connectWs = () => {
+    try {
+      const scheme = API.startsWith("https") ? "wss" : "ws";
+      const host = API.replace(/^https?:\/\//, "");
+      ws = new WebSocket(`${scheme}://${host}/ws?channel=${CHANNEL}`);
+      ws.onmessage = e => { try { if (JSON.parse(e.data).type === "drop") load(); } catch {} };
+      ws.onclose = () => { ws = null; pollTimer = setInterval(load, 4000); };
+      ws.onerror = () => ws?.close();
+    } catch {
+      pollTimer = setInterval(load, 4000);
+    }
+  };
+  connectWs();
+
+  // Tell parent iframe when mouse leaves (so parent can hide the menu)
+  document.addEventListener("mouseleave", () => {
+    if (window.parent !== window) window.parent.postMessage({ type: "drop:mouseleft" }, "*");
+  });
+})();
+</script>
+</body>
+</html>
