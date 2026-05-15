@@ -18,8 +18,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     var menuURL: URL {
-        let bundlePath = Bundle.main.bundlePath
-        let exeDir = (bundlePath as NSString).deletingLastPathComponent
+        let exePath = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().path
+        let exeDir = (exePath as NSString).deletingLastPathComponent
         let candidates = [
             (exeDir as NSString).appendingPathComponent("../web/index.html"),
             (exeDir as NSString).appendingPathComponent("web/index.html"),
