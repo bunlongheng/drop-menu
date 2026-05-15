@@ -19,6 +19,9 @@
   .tile{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.4);transition:transform .15s,border-color .15s}
   .tile:hover{transform:scale(1.05);border-color:rgba(255,255,255,.7)}
   .tile:active{transform:scale(.95)}
+  .tile.copied{border-color:#16a34a;box-shadow:0 0 8px rgba(22,163,74,.5)}
+  .toast{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;font-size:10px;padding:4px 12px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:99}
+  .toast.show{opacity:1}
   .tile img{width:100%;height:100%;object-fit:cover;display:block}
   .tile .text{display:flex;align-items:flex-start;padding:6px;font-size:9px;line-height:1.3;color:#aaa;word-break:break-all;overflow:hidden}
   .tile .file{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:100%;padding:4px}
@@ -41,6 +44,7 @@
 <main id="main">
   <div class="empty"><div class="spin"></div></div>
 </main>
+<div class="toast" id="toast"></div>
 <script>
 (() => {
   const params = new URLSearchParams(location.search);
@@ -48,6 +52,40 @@
   const CHANNEL = params.get("channel") || "default";
   const main = document.getElementById("main");
   const countEl = document.getElementById("count");
+  const toastEl = document.getElementById("toast");
+  let toastTimer;
+  const toast = msg => {
+    clearTimeout(toastTimer);
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1200);
+  };
+  const blink = tile => {
+    tile.classList.add("copied");
+    setTimeout(() => tile.classList.remove("copied"), 600);
+  };
+
+  const copyImage = async (dataUrl) => {
+    const resp = await fetch(dataUrl);
+    const original = await resp.blob();
+    if (original.type === "image/png") {
+      await navigator.clipboard.write([new ClipboardItem({"image/png": original})]);
+      return;
+    }
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    c.getContext("2d").drawImage(img, 0, 0);
+    const blob = await new Promise(r => c.toBlob(r, "image/png"));
+    await navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+  };
+
+  const downloadFile = (dataUrl, name) => {
+    const a = document.createElement("a");
+    a.href = dataUrl; a.download = name; a.click();
+  };
 
   const fmtAge = iso => {
     const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -101,10 +139,27 @@
     age.textContent = fmtAge(item.createdAt);
     tile.appendChild(age);
 
-    tile.addEventListener("click", () => {
-      window.parent !== window
-        ? window.parent.postMessage({ type: "drop:open", id: item.id, api: API }, "*")
-        : window.open(API + "/", "_blank");
+    tile.addEventListener("click", async () => {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: "drop:open", id: item.id, api: API }, "*");
+        return;
+      }
+      try {
+        const content = await fetchContent(item.id);
+        if (!content) { toast("No content"); return; }
+        if (item.contentType === "image") {
+          await copyImage(content);
+          blink(tile); toast("Copied image");
+        } else if (item.contentType === "text") {
+          await navigator.clipboard.writeText(content);
+          blink(tile); toast("Copied text");
+        } else {
+          downloadFile(content, item.fileName || "file");
+          blink(tile); toast("Downloaded");
+        }
+      } catch (e) {
+        toast("Copy failed");
+      }
     });
 
     return tile;
