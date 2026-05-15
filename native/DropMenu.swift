@@ -49,6 +49,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func setupPopover() {
         let cfg = WKWebViewConfiguration()
         cfg.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
+        // Required so the file:// page can fetch() http:// API endpoints (WKWebView
+        // blocks file→http even with server CORS unless this universal-access flag is on).
+        cfg.preferences.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
         webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 360, height: 480), configuration: cfg)
         webView.loadFileURL(menuURL, allowingReadAccessTo: menuURL.deletingLastPathComponent())
 
