@@ -48,7 +48,7 @@
 <script>
 (() => {
   const params = new URLSearchParams(location.search);
-  const API = (params.get("api") || "http://10.0.0.218:4321").replace(/\/$/, "");
+  const API = (params.get("api") || window.__DROP_API__ || "http://10.0.0.218:4321").replace(/\/$/, "");
   const CHANNEL = params.get("channel") || "default";
   const main = document.getElementById("main");
   const countEl = document.getElementById("count");
@@ -65,7 +65,11 @@
     setTimeout(() => tile.classList.remove("copied"), 600);
   };
 
+  const native = window.webkit?.messageHandlers?.clipboard;
+
   const copyImage = async (dataUrl) => {
+    const b64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
+    if (native) { native.postMessage({kind:"image", data:b64}); return; }
     const resp = await fetch(dataUrl);
     const original = await resp.blob();
     if (original.type === "image/png") {
@@ -80,6 +84,11 @@
     c.getContext("2d").drawImage(img, 0, 0);
     const blob = await new Promise(r => c.toBlob(r, "image/png"));
     await navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+  };
+
+  const copyText = async (text) => {
+    if (native) { native.postMessage({kind:"text", data:text}); return; }
+    await navigator.clipboard.writeText(text);
   };
 
   const downloadFile = (dataUrl, name) => {
@@ -151,7 +160,7 @@
           await copyImage(content);
           blink(tile); toast("Copied image");
         } else if (item.contentType === "text") {
-          await navigator.clipboard.writeText(content);
+          await copyText(content);
           blink(tile); toast("Copied text");
         } else {
           downloadFile(content, item.fileName || "file");

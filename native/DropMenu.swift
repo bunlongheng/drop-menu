@@ -7,29 +7,25 @@ let delegate = AppDelegate()
 app.delegate = delegate
 app.run()
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler {
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     var webView: WKWebView!
     var mouseTracker: Any?
+    var htmlString: String?
 
     var dropURL: String {
         ProcessInfo.processInfo.environment["DROP_URL"] ?? "http://10.0.0.218:4321"
     }
 
-    var menuURL: URL {
+    var htmlPath: String? {
         let exePath = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().path
         let exeDir = (exePath as NSString).deletingLastPathComponent
         let candidates = [
             (exeDir as NSString).appendingPathComponent("../web/index.html"),
             (exeDir as NSString).appendingPathComponent("web/index.html"),
-            Bundle.main.path(forResource: "index", ofType: "html") ?? ""
         ]
-        for path in candidates where FileManager.default.fileExists(atPath: path) {
-            let encoded = dropURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? dropURL
-            return URL(fileURLWithPath: path).appendingQueryItem("api", value: encoded)
-        }
-        return URL(string: "\(dropURL)?api=\(dropURL)")!
+        return candidates.first(where: { FileManager.default.fileExists(atPath: $0) })
     }
 
     func applicationDidFinishLaunching(_ n: Notification) {
@@ -49,11 +45,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func setupPopover() {
         let cfg = WKWebViewConfiguration()
         cfg.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
-        // Required so the file:// page can fetch() http:// API endpoints (WKWebView
-        // blocks file→http even with server CORS unless this universal-access flag is on).
-        cfg.preferences.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
+        cfg.userContentController.add(self, name: "clipboard")
         webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 360, height: 480), configuration: cfg)
-        webView.loadFileURL(menuURL, allowingReadAccessTo: menuURL.deletingLastPathComponent())
 
         let vc = NSViewController()
         vc.view = webView
@@ -65,6 +58,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentSize = NSSize(width: 360, height: 480)
         popover.behavior = .transient
         popover.animates = true
+
+        loadPage()
+    }
+
+    func loadPage() {
+        if let path = htmlPath, var html = try? String(contentsOfFile: path, encoding: .utf8) {
+            let tag = "<head>"
+            let inject = "<script>window.__DROP_API__='\(dropURL)';</script>"
+            html = html.replacingOccurrences(of: tag, with: tag + inject)
+            htmlString = html
+            webView.loadHTMLString(html, baseURL: nil)
+        } else {
+            let encoded = dropURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? dropURL
+            webView.load(URLRequest(url: URL(string: "\(dropURL)?api=\(encoded)")!))
+        }
     }
 
     @objc func togglePopover(_ sender: Any?) {
@@ -73,7 +81,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             popover.performClose(sender)
             stopMouseTracking()
         } else {
-            webView.reload()
+            if let html = htmlString { webView.loadHTMLString(html, baseURL: nil) }
             popover.show(relativeTo: btn.bounds, of: btn, preferredEdge: .minY)
             startMouseTracking()
         }
@@ -94,14 +102,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func stopMouseTracking() {
         if let t = mouseTracker { NSEvent.removeMonitor(t); mouseTracker = nil }
     }
-}
 
-extension URL {
-    func appendingQueryItem(_ name: String, value: String) -> URL {
-        var comps = URLComponents(url: self, resolvingAgainstBaseURL: false) ?? URLComponents()
-        var items = comps.queryItems ?? []
-        items.append(URLQueryItem(name: name, value: value))
-        comps.queryItems = items
-        return comps.url ?? self
+    func userContentController(_ uc: WKUserContentController, didReceive msg: WKScriptMessage) {
+        guard let body = msg.body as? [String: String], let kind = body["kind"] else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        if kind == "image", let b64 = body["data"], let data = Data(base64Encoded: b64) {
+            if let img = NSImage(data: data) { pb.writeObjects([img]) }
+        } else if kind == "text", let text = body["data"] {
+            pb.setString(text, forType: .string)
+        }
     }
 }
