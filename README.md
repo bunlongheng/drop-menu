@@ -1,11 +1,55 @@
+<div align="center">
+
 # drop-menu
 
-A tiny, reusable menu UI for [Drop](https://github.com/bunlongheng/drop). Two pieces, both lean:
+**A tiny, iframeable menu UI for Drop, with a macOS menu bar shell.**
 
-- **`web/index.html`** — vanilla HTML+JS (~180 lines), iframeable anywhere.
-- **`native/DropMenu.swift`** — macOS menu bar shell (~95 lines) that loads the web page in a WKWebView popover.
+A single-file web widget plus a sub-100-line Swift wrapper that puts your Drop items one click away in the menu bar.
 
-The web page is the reusable part. The Swift app is just a thin wrapper that gives you a menu bar entry point.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Swift](https://img.shields.io/badge/Swift-F05138?logo=swift&logoColor=white)
+![Vanilla JS](https://img.shields.io/badge/Vanilla-JS-F7DF1E?logo=javascript&logoColor=black)
+![macOS 13+](https://img.shields.io/badge/macOS-13%2B-000000?logo=apple&logoColor=white)
+
+<img src="assets/hero.svg" alt="drop-menu menu bar popover" width="660">
+
+</div>
+
+## Why
+
+The main [Drop](https://github.com/bunlongheng/drop) app is the full experience: drag-drop,
+paste, search, delete, modals, history. `drop-menu` is the opposite. It is a tiny,
+read-only window into the same data, built to live where the full UI is too heavy: a menu
+bar, a sidebar widget, or an embedded panel inside another product. Keeping it in its own
+repo means the full Drop app can evolve freely, and any product can iframe the widget
+without pulling in Next.js, Tailwind, or React.
+
+## Features
+
+- Single-file vanilla HTML and JS web widget, iframeable anywhere
+- macOS menu bar shell in under 100 lines of Swift
+- Reads any Drop server via a `?api=` query param, so one widget works against any instance
+- Live updates over WebSocket, with automatic polling fallback every 4 seconds
+- Lazy content loading via `IntersectionObserver`, so the grid appears instantly
+- `postMessage` events let the parent own navigation and hide-on-leave
+- Read-only by design: it lists items, never uploads, deletes, or modifies
+- No frameworks, no bundler, no npm in the web widget
+
+## Repo layout
+
+```
+drop-menu/
+├── README.md
+├── web/
+│   └── index.html       # iframeable menu page (vanilla HTML + JS)
+└── native/
+    ├── build.sh         # compiles the DropMenu binary
+    ├── DropMenu.swift    # menu bar app source
+    └── DropMenu          # built binary (gitignored)
+```
+
+The web page is the reusable part. The Swift app is a thin wrapper that gives you a menu
+bar entry point.
 
 ```
 ┌──────────────────────┐
@@ -17,32 +61,81 @@ The web page is the reusable part. The Swift app is just a thin wrapper that giv
 └──────────────────────┘
 ```
 
----
+## Install
 
-## Web — iframe embed
+Clone the repo. There are no npm dependencies.
 
-Serve `web/index.html` from any static host (Vercel, Netlify, S3, `python3 -m http.server`, etc.), then embed it:
+```bash
+git clone https://github.com/bunlongheng/drop-menu
+cd drop-menu
+```
+
+Building the native app requires the Xcode Command Line Tools and macOS 13 or newer:
+
+```bash
+xcode-select --install
+```
+
+You also need a running Drop server (local or remote) for the menu to read from.
+
+## Quick start
+
+### Web (standalone)
+
+Serve `web/index.html` from any static host and open it, pointing `?api=` at your Drop server:
+
+```bash
+cd web
+python3 -m http.server 4445
+# then open http://localhost:4445/?api=http://localhost:4321
+```
+
+### Native (macOS menu bar)
+
+```bash
+cd native
+./build.sh
+DROP_URL=http://localhost:4321 ./DropMenu &
+```
+
+`build.sh` produces a single binary, `native/DropMenu`, next to the source. No bundle and
+no signing are required for personal use.
+
+What it does:
+
+- Sits in the menu bar with the system `arrow.down.to.line` icon (a template image that adapts to light and dark)
+- Opens a 360x480 popover with the menu grid on click
+- Auto-hides when the mouse leaves the popover area
+- Shows no Dock icon (`activationPolicy = .accessory`)
+- Loads `web/index.html` in a `WKWebView` and passes `DROP_URL` through as `?api=`
+
+## Usage
+
+### iframe embed
+
+Serve `web/index.html` from any static host (Vercel, Netlify, S3, `python3 -m http.server`,
+and so on), then embed it:
 
 ```html
-<iframe src="https://your-host.example.com/?api=http://10.0.0.218:4321"
+<iframe src="https://your-host.example.com/?api=https://your-drop-server.example.com"
         width="360" height="480" frameborder="0"></iframe>
 ```
 
-### Query params
+#### Query params
 
 | Param | Default | Description |
 |---|---|---|
-| `api` | `http://10.0.0.218:4321` | Drop server base URL (no trailing slash) |
+| `api` | the configured Drop server URL | Drop server base URL (no trailing slash) |
 | `channel` | `default` | Channel name to display |
 
-### postMessage events
+#### postMessage events
 
 The iframe emits these events on `window.parent`:
 
 | Event | Payload | When |
 |---|---|---|
-| `drop:open` | `{ type, id, api }` | User clicked a tile — open the full Drop UI or do whatever you want |
-| `drop:mouseleft` | `{ type }` | Mouse left the iframe — parent can hide/close the menu |
+| `drop:open` | `{ type, id, api }` | A tile was clicked. Open the full Drop UI, or do whatever you want |
+| `drop:mouseleft` | `{ type }` | The mouse left the iframe. The parent can hide or close the menu |
 
 ```js
 window.addEventListener("message", e => {
@@ -54,103 +147,40 @@ window.addEventListener("message", e => {
 });
 ```
 
-### Live updates
+#### Configuration
 
-The web page connects to `${api}/ws?channel=${channel}` for WebSocket push, and falls back to polling every 4s if WS fails. New drops appear without a refresh.
-
----
-
-## Native — macOS menu bar
-
-```bash
-cd native
-./build.sh
-DROP_URL=http://10.0.0.218:4321 ./DropMenu &
-```
-
-### What it does
-
-- Sits in the menu bar with a system `arrow.down.to.line` icon (template — adapts to light/dark)
-- Click to open a 360×480 popover with the menu grid
-- Mouse leaves the popover area → auto-hides
-- No Dock icon (`activationPolicy = .accessory`)
-- WKWebView loads `web/index.html` via `file://` and passes `DROP_URL` as `?api=`
-
-### Configuration
-
-| Env var | Default | Description |
+| Env var | Used by | Description |
 |---|---|---|
-| `DROP_URL` | `http://10.0.0.218:4321` | Drop server base URL |
+| `DROP_URL` | `native/DropMenu` | Drop server base URL passed to the web widget as `?api=` |
 
-### Requirements
+## How it works
 
-- macOS 13+
-- Xcode Command Line Tools: `xcode-select --install`
-- A running Drop server (local or remote)
+The widget fetches item metadata, renders a tile grid instantly, then streams thumbnails
+in as you scroll using an `IntersectionObserver`. It connects to
+`${api}/ws?channel=${channel}` for live WebSocket push and falls back to polling every 4
+seconds if the socket fails, so new drops appear without a refresh. The native shell
+simply loads that same page in a `WKWebView` popover anchored to a menu bar item.
 
-### Build output
+### Drop API used
 
-`./build.sh` produces a single binary `native/DropMenu` next to the source. No bundle, no signing required for personal use.
-
----
-
-## CORS requirement
-
-The Drop server must send permissive CORS headers on `/api/drop` so the menu (loading from another origin or `file://`) can fetch data. The upstream `drop` repo handles this in `next.config.ts`:
-
-```ts
-async headers() {
-  return [{
-    source: "/api/drop/:path*",
-    headers: [
-      { key: "Access-Control-Allow-Origin", value: "*" },
-      { key: "Access-Control-Allow-Methods", value: "GET,POST,DELETE,OPTIONS" },
-      { key: "Access-Control-Allow-Headers", value: "Content-Type" },
-    ],
-  }];
-}
-```
-
-If the menu shows "Cannot reach …", check the Drop server has those headers.
-
----
-
-## Drop API used
-
-The menu only reads — it never writes. Two endpoints:
+The menu only reads. It never writes.
 
 | Method | Endpoint | Used for |
 |---|---|---|
-| `GET` | `/api/drop?channel=default` | List items (no content, just metadata) |
+| `GET` | `/api/drop?channel=default` | List items (metadata only, no content) |
 | `GET` | `/api/drop?id=<uuid>` | Fetch full content for one item (lazy, on scroll) |
 | `WS` | `/ws?channel=default` | Live push when a new drop arrives |
 
-See [`DROPZONE_API.md`](https://github.com/bunlongheng/drop/blob/main/DROPZONE_API.md) in the parent Drop repo for full API details.
+See [`DROPZONE_API.md`](https://github.com/bunlongheng/drop/blob/main/DROPZONE_API.md) in
+the parent Drop repo for full API details.
 
----
+### CORS requirement
 
-## Repo layout
+Because the menu loads from another origin (or from `file://` in the native app), the Drop
+server must send permissive CORS headers on `/api/drop` so the widget can fetch data. The
+upstream `drop` repo handles this in its `next.config.ts`. If the menu shows
+"Cannot reach ...", check that the Drop server is sending those headers.
 
-```
-drop-menu/
-├── .gitignore
-├── README.md
-├── web/
-│   └── index.html       # iframeable menu page
-└── native/
-    ├── build.sh         # compiles DropMenu binary
-    ├── DropMenu.swift   # menu bar app source
-    └── DropMenu         # built binary (gitignored)
-```
+## License
 
----
-
-## Why this exists
-
-The main Drop app is the full UI — drag-drop, paste, search, delete, modal, history. The menu is the *opposite*: a tiny read-only window into the same data, designed to live in places where the full UI is too heavy (menu bar, sidebar widget, embedded panel in another product).
-
-Keeping it separate from the main `drop` repo so:
-
-1. The full Drop app can change freely without coupling the embeddable widget.
-2. Other products can iframe this without pulling in Next.js/Tailwind/React.
-3. The Swift wrapper stays under 100 lines.
+[MIT](LICENSE)

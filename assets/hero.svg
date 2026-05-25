@@ -1,0 +1,45 @@
+<svg width="660" height="300" viewBox="0 0 660 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="drop-menu menu bar popover">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1b2330"/>
+      <stop offset="100%" stop-color="#0e131c"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2b3344"/>
+      <stop offset="100%" stop-color="#222a39"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="660" height="300" rx="14" fill="url(#bg)"/>
+
+  <!-- menu bar -->
+  <rect x="0" y="0" width="660" height="26" fill="url(#bar)"/>
+  <circle cx="20" cy="13" r="4" fill="#7c8696"/>
+  <rect x="560" y="9" width="9" height="9" rx="1" fill="none" stroke="#cfd6e4" stroke-width="1.4"/>
+  <line x1="564.5" y1="9" x2="564.5" y2="16" stroke="#cfd6e4" stroke-width="1.4"/>
+  <path d="M561.5 13.5 L564.5 16.5 L567.5 13.5" fill="none" stroke="#cfd6e4" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- popover anchored under the icon -->
+  <path d="M558 28 L569 28 L563.5 22 Z" fill="#10141d"/>
+  <rect x="430" y="34" width="200" height="170" rx="12" fill="#10141d" stroke="#2a3242" stroke-width="1"/>
+
+  <!-- 4x3 tile grid -->
+  <g>
+    <rect x="446" y="50"  width="38" height="38" rx="6" fill="#ff3b30"/>
+    <rect x="492" y="50"  width="38" height="38" rx="6" fill="#ff9500"/>
+    <rect x="538" y="50"  width="38" height="38" rx="6" fill="#34c759"/>
+    <rect x="584" y="50"  width="38" height="38" rx="6" fill="#32ade6"/>
+    <rect x="446" y="96"  width="38" height="38" rx="6" fill="#ffcc00"/>
+    <rect x="492" y="96"  width="38" height="38" rx="6" fill="#00c7be"/>
+    <rect x="538" y="96"  width="38" height="38" rx="6" fill="#af52de"/>
+    <rect x="584" y="96"  width="38" height="38" rx="6" fill="#ff2d55"/>
+    <rect x="446" y="142" width="38" height="38" rx="6" fill="#5ac8fa"/>
+    <rect x="492" y="142" width="38" height="38" rx="6" fill="#34c759"/>
+    <rect x="538" y="142" width="38" height="38" rx="6" fill="#ff9500"/>
+    <rect x="584" y="142" width="38" height="38" rx="6" fill="#7c8696"/>
+  </g>
+
+  <text x="40" y="150" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="40" font-weight="700" fill="#f5f7fa">drop-menu</text>
+  <text x="42" y="184" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="15" fill="#9aa3b2">A tiny, iframeable menu UI for Drop,</text>
+  <text x="42" y="206" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="15" fill="#9aa3b2">with a macOS menu bar shell.</text>
+</svg>
